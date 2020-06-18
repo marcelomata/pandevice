@@ -289,7 +289,7 @@ Status: Alpha
 
 Potentially breaking-changes in this version, please update your scripts to account for the following:
 
-- The default vsys for firewalls is changed from "vsys1" to None.  This has no effect for scripts that set the vsys on the firewall object directly (vsys is still treated as vsys1 in this situation).  This specific change was to better align pandevice with the default behavior of the firewall, which only imports interfaces by default (vsys1 if otherwise unspecified).  Thus, virtual wire, virtual routers, and VLANs will only be imported if they are attached to a Vsys object *or* the firewall has a vsys set.
+- The default vsys for firewalls is changed from "vsys1" to None.  This has no effect for scripts that set the vsys on the firewall object directly (vsys is still treated as vsys1 in this situation).  This specific change was to better align pan-os-python with the default behavior of the firewall, which only imports interfaces by default (vsys1 if otherwise unspecified).  Thus, virtual wire, virtual routers, and VLANs will only be imported if they are attached to a Vsys object *or* the firewall has a vsys set.
 - VsysResources and SystemSettings now have a name of None
 - SubinterfaceArp and EthernetInterfaceArp have been replaced with Arp
 

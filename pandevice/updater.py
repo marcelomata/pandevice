@@ -19,8 +19,8 @@
 
 from pan.config import PanConfig
 
-import pandevice.errors as err
-from pandevice import PanOSVersion, getlogger, isstring
+import panos.errors as err
+from panos import PanOSVersion, getlogger, isstring
 
 logger = getlogger(__name__)
 
@@ -35,47 +35,45 @@ class Updater(object):
         self.versions = {}
 
     def _op(self, cmd):
-        return self.pandevice.xapi.op(cmd, cmd_xml=True)
+        return self.panos.xapi.op(cmd, cmd_xml=True)
 
 
 class SoftwareUpdater(Updater):
     def info(self):
-        self._logger.debug("Device %s software updater: info" % self.pandevice.id)
+        self._logger.debug("Device %s software updater: info" % self.panos.id)
         response = self._op("request system software info")
-        self.pandevice.version = self._parse_current_version(response)
+        self.panos.version = self._parse_current_version(response)
         self.versions = self._parse_version_list(response)
 
     def check(self):
         self._logger.debug(
-            "Device %s software updater: check for new versions" % self.pandevice.id
+            "Device %s software updater: check for new versions" % self.panos.id
         )
         response = self._op("request system software check")
-        self.pandevice.version = self._parse_current_version(response)
+        self.panos.version = self._parse_current_version(response)
         self.versions = self._parse_version_list(response)
 
     def download(self, version, sync_to_peer=True, sync=False):
         self._logger.info(
-            "Device %s downloading version: %s" % (self.pandevice.id, version)
+            "Device %s downloading version: %s" % (self.panos.id, version)
         )
         response = self._op(
             'request system software download sync-to-peer "%s" version "%s"'
             % ("yes" if sync_to_peer else "no", version)
         )
         if sync:
-            result = self.pandevice.syncjob(response)
+            result = self.panos.syncjob(response)
             if not result["success"]:
                 raise err.PanDeviceError(
                     "Device %s attempt to download version %s failed: %s"
-                    % (self.pandevice.id, version, result["messages"])
+                    % (self.panos.id, version, result["messages"])
                 )
             return result
         else:
             return True
 
     def install(self, version, load_config=None, sync=False):
-        self._logger.info(
-            "Device %s installing version: %s" % (self.pandevice.id, version)
-        )
+        self._logger.info("Device %s installing version: %s" % (self.panos.id, version))
         response = self._op(
             'request system software install%s version "%s"'
             % (
@@ -84,11 +82,11 @@ class SoftwareUpdater(Updater):
             )
         )
         if sync:
-            result = self.pandevice.syncjob(response)
+            result = self.panos.syncjob(response)
             if not result["success"]:
                 raise err.PanDeviceError(
                     "Device %s attempt to install version %s failed: %s"
-                    % (self.pandevice.id, version, result["messages"])
+                    % (self.panos.id, version, result["messages"])
                 )
             return result
         else:
@@ -117,7 +115,7 @@ class SoftwareUpdater(Updater):
         # Get versions as StrictVersion objects
         available_versions = map(PanOSVersion, self.versions.keys())
         target_version = PanOSVersion(str(version))
-        current_version = PanOSVersion(self.pandevice.version)
+        current_version = PanOSVersion(self.panos.version)
 
         if str(target_version) not in available_versions:
             raise err.PanDeviceError(
@@ -128,7 +126,7 @@ class SoftwareUpdater(Updater):
         if current_version == target_version:
             raise err.PanDeviceError(
                 "Requested upgrade to version %s which is already running on device %s"
-                % (target_version, self.pandevice.id)
+                % (target_version, self.panos.id)
             )
 
         # Download the software upgrade
@@ -145,18 +143,18 @@ class SoftwareUpdater(Updater):
         # Reboot the device
         self._logger.info(
             "Device %s is rebooting after upgrading to version  %s. This will take a while."
-            % (self.pandevice.id, version)
+            % (self.panos.id, version)
         )
-        self.pandevice.restart()
+        self.panos.restart()
         if sync:
-            new_version = self.pandevice.syncreboot()
+            new_version = self.panos.syncreboot()
             if version != new_version:
                 raise err.PanDeviceError(
                     "Attempt to upgrade to version %s failed."
                     "Device %s is on version %s after reboot."
-                    % (version, self.pandevice.id, new_version)
+                    % (version, self.panos.id, new_version)
                 )
-            self.pandevice.version = new_version
+            self.panos.version = new_version
             return new_version
         else:
             return None
@@ -178,11 +176,11 @@ class SoftwareUpdater(Updater):
             self.check()
 
         # For a dry run, need to record the starting version
-        starting_version = self.pandevice.version
+        starting_version = self.panos.version
 
         # Get versions as StrictVersion objects
         available_versions = map(PanOSVersion, self.versions.keys())
-        current_version = PanOSVersion(self.pandevice.version)
+        current_version = PanOSVersion(self.panos.version)
         latest_version = max(available_versions)
         next_minor_version = self._next_minor_version(current_version)
 
@@ -190,7 +188,7 @@ class SoftwareUpdater(Updater):
         if current_version > target_version:
             raise err.PanDeviceError(
                 "Device %s upgrade failed: Can't upgrade from %s to %s."
-                % (self.pandevice.id, self.pandevice.version, target_version)
+                % (self.panos.id, self.panos.version, target_version)
             )
 
         # Determine the next version to upgrade to
@@ -206,7 +204,7 @@ class SoftwareUpdater(Updater):
         if next_version not in available_versions and not dryrun:
             self._logger.info(
                 "Device %s upgrading to %s, currently on %s. Checking for newer versions."
-                % (self.pandevice.id, target_version, self.pandevice.version)
+                % (self.panos.id, target_version, self.panos.version)
             )
             self.check()
             available_versions = map(PanOSVersion, self.versions.keys())
@@ -216,13 +214,13 @@ class SoftwareUpdater(Updater):
         if current_version == target_version:
             self._logger.info(
                 "Device %s is running target version: %s"
-                % (self.pandevice.id, target_version)
+                % (self.panos.id, target_version)
             )
             return True
         elif target_version == "latest" and current_version == latest_version:
             self._logger.info(
                 "Device %s is running latest version: %s"
-                % (self.pandevice.id, latest_version)
+                % (self.panos.id, latest_version)
             )
             if dryrun:
                 self._logger.info(
@@ -237,21 +235,20 @@ class SoftwareUpdater(Updater):
             return True
 
         # Ensure the content pack is upgraded to the latest
-        self.pandevice.content.download_and_install_latest(sync=True)
+        self.panos.content.download_and_install_latest(sync=True)
 
         # Upgrade to the next version
         self._logger.info(
-            "Device %s will be upgraded to version: %s"
-            % (self.pandevice.id, next_version)
+            "Device %s will be upgraded to version: %s" % (self.panos.id, next_version)
         )
         if dryrun:
-            self.pandevice.version = str(next_version)
+            self.panos.version = str(next_version)
         else:
             self.download_install_reboot(next_version, sync=True)
             self.check()
         result = self.upgrade_to_version(target_version, dryrun=dryrun)
         if result and dryrun:
-            self.pandevice.version = starting_version
+            self.panos.version = starting_version
         return result
 
     def _next_major_version(self, version):
@@ -264,7 +261,7 @@ class SoftwareUpdater(Updater):
         return next_version
 
     def _next_minor_version(self, version):
-        from pandevice.firewall import Firewall
+        from panos.firewall import Firewall
 
         if isstring(version):
             next_version = PanOSVersion(version)
@@ -333,13 +330,13 @@ class SoftwareUpdater(Updater):
 
         # Upgrading a firewall from PAN-OS 5.0.x to 6.0.x
         # This is a special case because there is no PAN-OS 5.1.x
-        from pandevice.firewall import Firewall
+        from panos.firewall import Firewall
 
         if (
             current_version.major == 5
             and current_version.minor == 0
             and target_version == "6.0.0"
-            and issubclass(type(self.pandevice), Firewall)
+            and issubclass(type(self.panos), Firewall)
         ):
             return True
 
@@ -349,12 +346,12 @@ class SoftwareUpdater(Updater):
 class ContentUpdater(Updater):
     def info(self):
         response = self._op("request content upgrade info")
-        self.pandevice.content_version = self._parse_current_version(response)
+        self.panos.content_version = self._parse_current_version(response)
         self.versions = self._parse_version_list(response)
 
     def check(self):
         response = self._op("request content upgrade check")
-        self.pandevice.content_version = self._parse_current_version(response)
+        self.panos.content_version = self._parse_current_version(response)
         self.versions = self._parse_version_list(response)
 
     def download(self, sync_to_peer=None, sync=False):
@@ -366,7 +363,7 @@ class ContentUpdater(Updater):
             return
         self._logger.info(
             "Device %s downloading content version: %s"
-            % (self.pandevice.id, latest_version)
+            % (self.panos.id, latest_version)
         )
         if sync_to_peer is None:
             sync_to_peer_text = ""
@@ -377,11 +374,11 @@ class ContentUpdater(Updater):
         command = "request content upgrade download latest{0}".format(sync_to_peer_text)
         response = self._op(command)
         if sync:
-            result = self.pandevice.syncjob(response)
+            result = self.panos.syncjob(response)
             if not result["success"]:
                 raise err.PanDeviceError(
                     "Device %s attempt to download content version %s failed: %s"
-                    % (self.pandevice.id, latest_version, result["messages"])
+                    % (self.panos.id, latest_version, result["messages"])
                 )
             return result
         else:
@@ -397,7 +394,7 @@ class ContentUpdater(Updater):
         if self.versions[str(latest_version)]["current"]:
             return
         self._logger.info(
-            "Device %s installing content version: %s" % (self.pandevice.id, version)
+            "Device %s installing content version: %s" % (self.panos.id, version)
         )
         op = (
             'request content upgrade install commit "%s" sync-to-peer "%s" version "%s"'
@@ -405,11 +402,11 @@ class ContentUpdater(Updater):
         )
         response = self._op(op)
         if sync:
-            result = self.pandevice.syncjob(response)
+            result = self.panos.syncjob(response)
             if not result["success"]:
                 raise err.PanDeviceError(
                     "Device %s attempt to install content version %s failed: %s"
-                    % (self.pandevice.id, version, result["messages"])
+                    % (self.panos.id, version, result["messages"])
                 )
             return result
         else:
@@ -422,7 +419,7 @@ class ContentUpdater(Updater):
     def downgrade(self, sync=False):
         response = self._op('request content downgrade install "previous"')
         if sync:
-            return self.pandevice.syncjob(response)
+            return self.panos.syncjob(response)
         else:
             return True
 
